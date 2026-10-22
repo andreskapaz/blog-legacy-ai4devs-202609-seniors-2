@@ -142,10 +142,7 @@ test.group('POST /posts/:slug/comentarios', (group) => {
     assert.deepEqual(respuesta.body(), { ok: false, motivo: 'comentario demasiado corto' })
   })
 
-  test('recorta los espacios de alrededor antes de medir y guardar', async ({
-    client,
-    assert,
-  }) => {
+  test('recorta los espacios de alrededor antes de medir y guardar', async ({ client, assert }) => {
     // Arrange
     await db.table('posts').insert(unPost())
 
@@ -251,6 +248,23 @@ test.group('POST /posts/:slug/comentarios', (group) => {
     assert.deepEqual(respuesta.body(), { error: 'El nombre es obligatorio' })
   })
 
+  test('responde 400 si el nombre es un valor falso que no es texto', async ({
+    client,
+    assert,
+  }) => {
+    // Arrange
+    await db.table('posts').insert(unPost())
+
+    // Act
+    const respuesta = await client
+      .post('/posts/post-de-prueba/comentarios')
+      .json(unEnvio({ autor_nombre: 0 }))
+
+    // Assert
+    respuesta.assertStatus(400)
+    assert.deepEqual(respuesta.body(), { error: 'El nombre es obligatorio' })
+  })
+
   test('responde 422 si falta el email', async ({ client, assert }) => {
     // Arrange
     await db.table('posts').insert(unPost())
@@ -328,9 +342,7 @@ test.group('POST /posts/:slug/comentarios', (group) => {
     await db.table('posts').insert(unPost())
 
     // Act
-    const respuesta = await client
-      .post('/posts/post-de-prueba/comentarios')
-      .json({ cuerpo: 'x' })
+    const respuesta = await client.post('/posts/post-de-prueba/comentarios').json({ cuerpo: 'x' })
 
     // Assert
     respuesta.assertStatus(400)
@@ -552,7 +564,23 @@ test.group('PATCH /comentarios/:id', (group) => {
       creado_en: '2026-01-02 09:30:00',
       padre_id: null,
     })
-    assert.strictEqual((await filaComentario(9101)).cuerpo, 'Texto corregido.')
+    const guardado = await filaComentario(9101)
+    assert.strictEqual(guardado.cuerpo, 'Texto corregido.')
+  })
+
+  test('devuelve creado_en nulo si el comentario no tiene fecha', async ({ client, assert }) => {
+    // Arrange
+    await db.table('posts').insert(unPost())
+    await db.table('comentarios').insert(unComentario({ creado_en: null }))
+
+    // Act
+    const respuesta = await client
+      .patch('/comentarios/9101')
+      .json({ autor_email: 'lucia.ferrer@ejemplo.es', cuerpo: 'Texto corregido.' })
+
+    // Assert
+    respuesta.assertStatus(200)
+    assert.isNull(respuesta.body().comentario.creado_en)
   })
 
   test('BUG: acepta un cuerpo de un solo carácter', async ({ client, assert }) => {
@@ -583,7 +611,8 @@ test.group('PATCH /comentarios/:id', (group) => {
     // Assert
     respuesta.assertStatus(403)
     assert.deepEqual(respuesta.body(), { error: 'No puedes editar este comentario' })
-    assert.strictEqual((await filaComentario(9101)).cuerpo, 'Un comentario suficientemente largo.')
+    const guardado = await filaComentario(9101)
+    assert.strictEqual(guardado.cuerpo, 'Un comentario suficientemente largo.')
   })
 
   test('BUG: compara el email con mayúsculas, al revés que el borrado', async ({
