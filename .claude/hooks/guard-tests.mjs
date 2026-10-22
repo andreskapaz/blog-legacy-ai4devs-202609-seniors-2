@@ -29,7 +29,7 @@ import { dirname, resolve } from 'node:path'
  * el primer recurso, 60 tras el segundo, 80 como destino. Al ponerlo > 0 el hook empieza a
  * correr `npm run test:coverage` y a leer backend/coverage/coverage-summary.json.
  */
-const COBERTURA_MINIMA = 0
+const COBERTURA_MINIMA = 40
 
 // El comando que el modelo quiere ejecutar llega como JSON por stdin, en tool_input.command.
 let comando = ''
