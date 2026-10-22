@@ -17,13 +17,6 @@ import router from '@adonisjs/core/services/router'
 import db from '@adonisjs/lucid/services/db'
 import { controllers } from '#generated/controllers'
 
-/**
- * Clave con la que se firman las sesiones y con la que además se validan las
- * acciones de moderación. TODO(2024-11): sacarla a variables de entorno antes
- * de subir a producción.
- */
-const SECRETO_SESION = 'dev-secret-cambiar'
-
 const POR_PAGINA = 5
 const MAX_RELACIONADOS = 2
 const MAX_RECIENTES = 4
@@ -290,107 +283,11 @@ router.get('/autores/:id', async ({ params, response }) => {
 })
 
 /* -------------------------------------------------------------------------
- * POST /posts/:slug/comentarios — deja un comentario pendiente de moderar
+ * Comentarios
  * ---------------------------------------------------------------------- */
-router.post('/posts/:slug/comentarios', async ({ params, request, response }) => {
-  const posts: any = await db.rawQuery(
-    "select * from posts where slug = ? and estado = 'publicado' limit 1",
-    [params.slug]
-  )
-  if (posts.length === 0) {
-    return response.status(404).send({ error: 'Post no encontrado' })
-  }
-  const post = posts[0]
-
-  const nombre = request.input('autor_nombre')
-  const email = request.input('autor_email')
-  const cuerpo = request.input('cuerpo')
-  const padre = request.input('padre_id', null)
-
-  if (!nombre) {
-    return response.status(400).send({ error: 'El nombre es obligatorio' })
-  }
-  if (!email) {
-    return response.status(422).send({ message: 'Falta el email' })
-  }
-  if (String(email).indexOf('@') === -1) {
-    return response.status(400).send({ errores: ['email no válido'] })
-  }
-  if (!cuerpo || String(cuerpo).length < 5) {
-    return response.send({ ok: false, motivo: 'comentario demasiado corto' })
-  }
-
-  const creado = new Date().toISOString().slice(0, 19).replace('T', ' ')
-  await db.rawQuery(
-    'insert into comentarios (post_id, autor_nombre, autor_email, cuerpo, estado, creado_en, padre_id) values (?, ?, ?, ?, ?, ?, ?)',
-    [post.id, nombre, email, cuerpo, 'pendiente', creado, padre]
-  )
-
-  const nuevos: any = await db.rawQuery(
-    'select * from comentarios order by id desc limit 1'
-  )
-
-  return response.status(201).send({ comentario: nuevos[0] })
-})
-
-/* -------------------------------------------------------------------------
- * DELETE /comentarios/:id — borra un comentario
- * ---------------------------------------------------------------------- */
-router.delete('/comentarios/:id', async ({ params, request, response }) => {
-  const filas: any = await db.rawQuery('select * from comentarios where id = ? limit 1', [
-    params.id,
-  ])
-  if (filas.length === 0) {
-    return response.status(404).send({ error: 'Comentario no encontrado' })
-  }
-  const comentario = filas[0]
-
-  // Puede borrar quien lo escribió, o cualquiera que traiga la clave de moderación.
-  const clave = request.header('x-clave-moderacion')
-  const email = request.input('autor_email', '')
-  const esModerador = clave === SECRETO_SESION
-  const esAutor =
-    String(comentario.autor_email).toLowerCase().trim() === String(email).toLowerCase().trim()
-
-  if (!esModerador && !esAutor) {
-    return response.status(403).send({ error: 'No puedes borrar este comentario' })
-  }
-
-  await db.rawQuery('delete from comentarios where id = ?', [params.id])
-  return response.status(200).send({ borrado: true })
-})
-
-/* -------------------------------------------------------------------------
- * PATCH /comentarios/:id — edita el cuerpo de un comentario
- * ---------------------------------------------------------------------- */
-router.patch('/comentarios/:id', async ({ params, request, response }) => {
-  const filas: any = await db.rawQuery('select * from comentarios where id = ? limit 1', [
-    params.id,
-  ])
-  if (filas.length === 0) {
-    return response.status(404).send({ error: 'Comentario no encontrado' })
-  }
-  const comentario = filas[0]
-
-  // Aquí la regla se volvió a escribir a mano y salió distinta: no admite la
-  // clave de moderación, compara el correo tal cual (con mayúsculas incluidas)
-  // y encima exige que el comentario siga pendiente.
-  const email = request.input('autor_email', '')
-  if (comentario.autor_email !== email || comentario.estado !== 'pendiente') {
-    return response.status(403).send({ error: 'No puedes editar este comentario' })
-  }
-
-  const cuerpo = request.input('cuerpo')
-  if (!cuerpo) {
-    return response.status(400).send({ error: 'Falta el cuerpo' })
-  }
-
-  await db.rawQuery('update comentarios set cuerpo = ? where id = ?', [cuerpo, params.id])
-  const actualizados: any = await db.rawQuery('select * from comentarios where id = ? limit 1', [
-    params.id,
-  ])
-  return response.send({ comentario: actualizados[0] })
-})
+router.post('/posts/:slug/comentarios', [controllers.Comentarios, 'store'])
+router.patch('/comentarios/:id', [controllers.Comentarios, 'update'])
+router.delete('/comentarios/:id', [controllers.Comentarios, 'destroy'])
 
 /* -------------------------------------------------------------------------
  * Autenticación del starter kit. Esto sí tiene controladores, validadores y

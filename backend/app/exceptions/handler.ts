@@ -1,5 +1,7 @@
 import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
+import ErrorDeContratoException from '#exceptions/error_de_contrato_exception'
+import { ValidacionDeContratoError } from '#validators/reporter_de_contrato'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   /**
@@ -13,6 +15,12 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * response to the client
    */
   async handle(error: unknown, ctx: HttpContext) {
+    if (error instanceof ErrorDeContratoException) {
+      return ctx.response.status(error.status).send(error.cuerpo)
+    }
+    if (error instanceof ValidacionDeContratoError) {
+      return ctx.response.status(error.respuesta.status).send(error.respuesta.cuerpo)
+    }
     return super.handle(error, ctx)
   }
 
@@ -23,6 +31,9 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * @note You should not attempt to send a response from this method.
    */
   async report(error: unknown, ctx: HttpContext) {
+    if (error instanceof ErrorDeContratoException || error instanceof ValidacionDeContratoError) {
+      return
+    }
     return super.report(error, ctx)
   }
 }
